@@ -8,17 +8,21 @@ import wandb
 from tqdm import tqdm
 from models.cola import COLA
 from models.similarity import BilinearSimilarity
-from data.audioset import Audioset
+from data.audioset import Audioset, LocalAudioset
 from data.utils import collate_audio_data
 
 
 def main(args):
+    os.makedirs(args.output_dir, exist_ok=True)
     cola = COLA(args.hidden_size, args.output_size)
     similarity = BilinearSimilarity(args.output_size)
     cross_entropy = nn.CrossEntropyLoss()
-    
-    audioset = Audioset(args.audioset_csv)
-    dataloader = DataLoader(audioset, batch_size=args.batch_size, num_workers=4, collate_fn=collate_audio_data)
+
+    # audioset_train = Audioset(args.audioset_csv, quiet=True)
+    audioset_train = LocalAudioset(args.audioset_train_folder)
+    audioset_val = LocalAudioset(args.audioset_valid_folder)
+    dataloader_train = DataLoader(audioset_train, batch_size=args.batch_size, num_workers=8, collate_fn=collate_audio_data)
+    dataloader_val = DataLoader(audioset_val, batch_size=args.batch_size, num_workers=4, collate_fn=collate_audio_data)
     optimizer = optim.AdamW(cola.parameters(), lr=args.learning_rate)
     # with open('test_files.txt', 'r') as f:
     #     audio_names = [line.strip() for line in f]
@@ -35,28 +39,44 @@ def main(args):
 
     cola.cuda()
     similarity.cuda()
-    for ix, batch in tqdm(enumerate(dataloader)):
-        audio_names, anchors, positives = batch
-        n_batch = anchors.shape[0]
-        anchors = anchors.cuda()
-        positives = positives.cuda()
-        optimizer.zero_grad()
+    for epoch in range(args.no_of_epochs):
+        # Training loop
+        for ix, batch in tqdm(enumerate(dataloader_train)):
+            audio_names, anchors, positives = batch
+            n_batch = anchors.shape[0]
+            anchors = anchors.cuda()
+            positives = positives.cuda()
+            optimizer.zero_grad()
 
-        y_anchors = cola(anchors)
-        y_positives = cola(positives)
+            y_anchors = cola(anchors)
+            y_positives = cola(positives)
 
-        similarities = similarity(y_anchors, y_positives)
-        loss = cross_entropy(similarities, torch.arange(n_batch).cuda())
+            similarities = similarity(y_anchors, y_positives)
+            loss = cross_entropy(similarities, torch.arange(n_batch).cuda())
 
-        loss.backward()
-        optimizer.step()
-        run.log({'loss': loss.item()})
+            loss.backward()
+            optimizer.step()
+            print(f'Epoch: {epoch}, Batch: {ix}, Training Loss: {loss.item()}')
+            run.log({'loss': loss.item()})
         if ix % args.save_every == 0:
-            # TODO: zapisywać optimizer?
             torch.save(cola.state_dict(), os.path.join(args.output_dir, f'cola_{ix}.pth'))
             torch.save(similarity.state_dict(), os.path.join(args.output_dir, f'similarity_{ix}.pth'))
-    # TODO: dane, configi, wszystko
-    pass
+        with torch.no_grad():
+            val_loss = 0
+            for ix, batch in enumerate(dataloader_val):
+                audio_names, anchors, positives = batch
+                n_batch = anchors.shape[0]
+                anchors = anchors.cuda()
+                positives = positives.cuda()
+
+                y_anchors = cola(anchors)
+                y_positives = cola(positives)
+
+                similarities = similarity(y_anchors, y_positives)
+                loss = cross_entropy(similarities, torch.arange(n_batch).cuda())
+                val_loss += loss.item()
+            val_loss /= len(dataloader_val)
+            print(f'Epoch: {epoch}, Validation Loss: {val_loss}')
 
 
 if __name__ == "__main__":
@@ -68,8 +88,10 @@ if __name__ == "__main__":
     parser.add_argument('--batch_size', help='Batch size', default=64)
     parser.add_argument('--no_of_epochs', help='Number of epochs', default=500)
     parser.add_argument('--log', help='Log using wandb', default=True)
-    parser.add_argument('--save_every', help='Save checkpoint every n steps', default=100)
+    parser.add_argument('--save_every', type=int, help='Save checkpoint every n steps', default=100)
     parser.add_argument('output_dir', help='Output directory')
-    parser.add_argument('audioset_csv', help='Path to the Audioset unbalanced train set')
+    parser.add_argument('--audioset_csv', help='Path to the Audioset unbalanced train set')
+    parser.add_argument('--audioset_train_folder', help='Path to the Audioset balanced train set')
+    parser.add_argument('--audioset_valid_folder', help='Path to the Audioset balanced valid set')
     args = parser.parse_args()
     main(args)
