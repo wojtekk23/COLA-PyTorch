@@ -41,9 +41,14 @@ def download_video(ytid: str, start_sec: float, end_sec: float, video_folder='vi
 
 
 def process_audio(video_path, sampling_rate=16000):
-    y, sr = librosa.load(video_path)
-    segment = librosa.feature.melspectrogram(y, sr, hop_length=160, win_length=400, n_fft=1024, n_mels=64, fmin=60, fmax=7800)
+    y, sr = librosa.load(video_path, sr=sampling_rate)
+    segment = librosa.feature.melspectrogram(y=y, sr=sr, hop_length=160, win_length=400, n_fft=1024, n_mels=64, fmin=60, fmax=7800)
     return segment
+
+def process_audio_stft(video_path, sampling_rate=16000):
+    y, sr = librosa.load(video_path)
+    segment = librosa.stft(n_fft=2048, win_length=2000, hop_length=500)
+    pass
 
 
 class Audioset(Dataset):
@@ -90,11 +95,18 @@ class LocalAudioset(Dataset):
         audio_path = self.audio_paths[ix]
 
         audio = process_audio(audio_path, sampling_rate=self.sr)
+        # If the audio clip is too short, pad it with zeros
+        if audio.shape[1] < self.sample_len:
+            padding = self.sample_len - audio.shape[1] + 50
+            audio = np.pad(audio, ((0, 0), (0, padding)), mode='constant')
 
-        anchor_begin, positive_begin = np.random.randint(0, audio.shape[1] - self.sample_len, size=2)
-        anchor = audio[:, anchor_begin:anchor_begin + self.sample_len]
-        positive = audio[:, positive_begin:positive_begin + self.sample_len]
-
+        try:
+            anchor_begin, positive_begin = np.random.randint(0, audio.shape[1] - self.sample_len, size=2)
+            anchor = audio[:, anchor_begin:anchor_begin + self.sample_len]
+            positive = audio[:, positive_begin:positive_begin + self.sample_len]
+        except Exception as e:
+            print(audio.shape[1], self.sample_len, audio_path)
+            raise e
         return audio_path, anchor, positive
 
     def __len__(self):

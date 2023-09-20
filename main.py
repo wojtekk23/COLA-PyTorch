@@ -23,7 +23,15 @@ def main(args):
     audioset_val = LocalAudioset(args.audioset_valid_folder)
     dataloader_train = DataLoader(audioset_train, batch_size=args.batch_size, num_workers=8, collate_fn=collate_audio_data)
     dataloader_val = DataLoader(audioset_val, batch_size=args.batch_size, num_workers=4, collate_fn=collate_audio_data)
-    optimizer = optim.AdamW(cola.parameters(), lr=args.learning_rate)
+    if not args.finetune:
+        optimizer = optim.AdamW(cola.parameters(), lr=args.learning_rate)
+    else:
+        optimizer = torch.optim.Adam([
+            {'params': cola.encoder.backend.features.parameters(), 'lr': args.learning_rate / 5},
+            {'params': cola.encoder.fc.parameters(), 'lr': args.learning_rate / 2},
+            {'params': cola.projection.parameters()},
+            {'params': cola.layernorm.parameters()},
+        ], lr=args.learning_rate)
     # with open('test_files.txt', 'r') as f:
     #     audio_names = [line.strip() for line in f]
     # anchors = torch.load('test_anchors.pth')
@@ -63,7 +71,7 @@ def main(args):
             torch.save(similarity.state_dict(), os.path.join(args.output_dir, f'similarity_{ix}.pth'))
         with torch.no_grad():
             val_loss = 0
-            for ix, batch in enumerate(dataloader_val):
+            for ix, batch in tqdm(enumerate(dataloader_val)):
                 audio_names, anchors, positives = batch
                 n_batch = anchors.shape[0]
                 anchors = anchors.cuda()
@@ -77,21 +85,24 @@ def main(args):
                 val_loss += loss.item()
             val_loss /= len(dataloader_val)
             print(f'Epoch: {epoch}, Validation Loss: {val_loss}')
+            run.log({'valid_loss': val_loss})
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Train COLA in PyTorch')
     # TODO: arguments
-    parser.add_argument('--hidden_size', help='Size of the tensor after encoder', default=1280)
-    parser.add_argument('--output_size', help='Size of the tensor after the projection head', default=512)
-    parser.add_argument('--learning_rate', help='Learning rate', default=0.0001)
-    parser.add_argument('--batch_size', help='Batch size', default=64)
-    parser.add_argument('--no_of_epochs', help='Number of epochs', default=500)
-    parser.add_argument('--log', help='Log using wandb', default=True)
-    parser.add_argument('--save_every', type=int, help='Save checkpoint every n steps', default=100)
+    parser.add_argument('--hidden_size', help='Size of the tensor after encoder', type=int, default=1280)
+    parser.add_argument('--output_size', help='Size of the tensor after the projection head', type=int, default=512)
+    parser.add_argument('--learning_rate', help='Learning rate', type=float, default=0.0001)
+    parser.add_argument('--batch_size', help='Batch size', type=int, default=64)
+    parser.add_argument('--no_of_epochs', help='Number of epochs', type=int, default=500)
+    parser.add_argument('--log', help='Log using wandb', type=bool, default=True)
+    parser.add_argument('--save_every', help='Save checkpoint every n epochs', type=int, default=1)
     parser.add_argument('output_dir', help='Output directory')
     parser.add_argument('--audioset_csv', help='Path to the Audioset unbalanced train set')
     parser.add_argument('--audioset_train_folder', help='Path to the Audioset balanced train set')
     parser.add_argument('--audioset_valid_folder', help='Path to the Audioset balanced valid set')
+    parser.add_argument('--finetune', action='store_true', help='Finetune layers after the encoder')
     args = parser.parse_args()
+    print(args)
     main(args)
