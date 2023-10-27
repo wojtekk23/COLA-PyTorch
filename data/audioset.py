@@ -85,9 +85,16 @@ class Audioset(Dataset):
 
 
 class LocalAudioset(Dataset):
-    def __init__(self, audio_folder, sample_len=96, sampling_rate=16000):
+    def __init__(self, audio_folder=None, audio_paths=None, sample_len=96, sampling_rate=16000):
         super(LocalAudioset, self).__init__()
-        self.audio_paths = [os.path.join(audio_folder, filename) for filename in os.listdir(audio_folder) if filename.endswith('.wav')]
+        if (audio_folder and audio_paths) or (not audio_folder and not audio_paths):
+            raise ValueError("You must set only one of the audio_folder/audio_paths")
+        if audio_folder:
+            self.audio_paths = [os.path.join(audio_folder, filename) for filename in os.listdir(audio_folder) if filename.endswith('.wav')]
+        elif audio_paths:
+            with open(audio_paths, 'r') as f:
+                self.audio_paths = f.read().split()
+
         self.sample_len = sample_len
         self.sr = sampling_rate
 

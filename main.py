@@ -19,8 +19,8 @@ def main(args):
     cross_entropy = nn.CrossEntropyLoss()
 
     # audioset_train = Audioset(args.audioset_csv, quiet=True)
-    audioset_train = LocalAudioset(args.audioset_train_folder)
-    audioset_val = LocalAudioset(args.audioset_valid_folder)
+    audioset_train = LocalAudioset(args.audioset_train_folder, args.audioset_train_paths)
+    audioset_val = LocalAudioset(args.audioset_valid_folder, args.audioset_valid_paths)
     dataloader_train = DataLoader(audioset_train, batch_size=args.batch_size, num_workers=8, collate_fn=collate_audio_data)
     dataloader_val = DataLoader(audioset_val, batch_size=args.batch_size, num_workers=4, collate_fn=collate_audio_data)
     if not args.finetune:
@@ -101,7 +101,9 @@ if __name__ == "__main__":
     parser.add_argument('output_dir', help='Output directory')
     parser.add_argument('--audioset_csv', help='Path to the Audioset unbalanced train set')
     parser.add_argument('--audioset_train_folder', help='Path to the Audioset balanced train set')
+    parser.add_argument('--audioset_train_paths', help='Text file where lines are the train audio paths', required=False, default=None)
     parser.add_argument('--audioset_valid_folder', help='Path to the Audioset balanced valid set')
+    parser.add_argument('--audioset_valid_paths', help='Text file where lines are the valid audio paths', required=False, default=None)
     parser.add_argument('--finetune', action='store_true', help='Finetune layers after the encoder')
     args = parser.parse_args()
     print(args)
