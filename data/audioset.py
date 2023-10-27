@@ -46,7 +46,7 @@ def process_audio(video_path, sampling_rate=16000):
     return segment
 
 def process_audio_stft(video_path, sampling_rate=16000):
-    y, sr = librosa.load(video_path)
+    y, sr = librosa.load(video_path, sr=sampling_rate)
     segment = librosa.stft(n_fft=2048, win_length=2000, hop_length=500)
     pass
 
