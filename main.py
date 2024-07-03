@@ -18,25 +18,23 @@ def main(args):
     similarity = BilinearSimilarity(args.output_size)
     cross_entropy = nn.CrossEntropyLoss()
 
-    # audioset_train = Audioset(args.audioset_csv, quiet=True)
     audioset_train = LocalAudioset(args.audioset_train_folder, args.audioset_train_paths)
     audioset_val = LocalAudioset(args.audioset_valid_folder, args.audioset_valid_paths)
     dataloader_train = DataLoader(audioset_train, batch_size=args.batch_size, num_workers=8, collate_fn=collate_audio_data)
     dataloader_val = DataLoader(audioset_val, batch_size=args.batch_size, num_workers=4, collate_fn=collate_audio_data)
     if not args.finetune:
-        optimizer = optim.AdamW(cola.parameters(), lr=args.learning_rate)
+        optimizer = optim.AdamW([
+            {'params': cola.parameters()},
+            {'params': similarity.parameters()},
+        ], lr=args.learning_rate)
     else:
         optimizer = torch.optim.Adam([
             {'params': cola.encoder.backend.features.parameters(), 'lr': args.learning_rate / 5},
             {'params': cola.encoder.fc.parameters(), 'lr': args.learning_rate / 2},
             {'params': cola.projection.parameters()},
             {'params': cola.layernorm.parameters()},
+            {'params': similarity.parameters()},
         ], lr=args.learning_rate)
-    # with open('test_files.txt', 'r') as f:
-    #     audio_names = [line.strip() for line in f]
-    # anchors = torch.load('test_anchors.pth')
-    # positives = torch.load('test_positives.pth')
-    # batch = audio_names, anchors, positives
 
     if args.log:
         run = wandb.init(project='COLA-PyTorch')
