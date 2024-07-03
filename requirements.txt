@@ -1,0 +1,10 @@
+torch
+torchvision
+torchaudio
+yt-dlp
+librosa
+pandas
+wandb
+tqdm
+numpy
+ffmpeg
