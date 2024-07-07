@@ -65,8 +65,8 @@ def main(args):
             print(f'Epoch: {epoch}, Batch: {ix}, Training Loss: {loss.item()}')
             run.log({'loss': loss.item()})
         if ix % args.save_every == 0:
-            torch.save(cola.state_dict(), os.path.join(args.output_dir, f'cola_{ix}.pth'))
-            torch.save(similarity.state_dict(), os.path.join(args.output_dir, f'similarity_{ix}.pth'))
+            torch.save(cola.state_dict(), os.path.join(args.output_dir, f'cola_{epoch}_{ix}.pth'))
+            torch.save(similarity.state_dict(), os.path.join(args.output_dir, f'similarity_{epoch}_{ix}.pth'))
         with torch.no_grad():
             val_loss = 0
             for ix, batch in tqdm(enumerate(dataloader_val)):
